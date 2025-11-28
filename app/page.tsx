@@ -1,31 +1,122 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Moon, Sun, Wallet } from "lucide-react"
-import Image from "next/image"
+import { useState, useEffect } from "react";
+
+// Extend the Window interface to include the ethereum property
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+import { Moon, Sun, Wallet } from "lucide-react";
+import Image from "next/image";
+
+import { ethers } from "ethers";
+import abi from "./abi/ParticipationNFT.json";
 
 export default function Home() {
-  const [isDark, setIsDark] = useState(true)
-  const [mounted, setMounted] = useState(false)
+  const [isDark, setIsDark] = useState(true);
+  const [mounted, setMounted] = useState(false);
+  const [address, setAddress] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [image, setImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const contractAddress = "0x91624F662eCf1325Be40105F73Ced52b17DB4b01";
 
   useEffect(() => {
-    setMounted(true)
-    const htmlElement = document.documentElement
-    htmlElement.classList.add("dark")
-  }, [])
+    setMounted(true);
+    const htmlElement = document.documentElement;
+    htmlElement.classList.add("dark");
+  }, []);
 
   useEffect(() => {
-    if (!mounted) return
+    if (!mounted) return;
 
-    const htmlElement = document.documentElement
+    const htmlElement = document.documentElement;
     if (isDark) {
-      htmlElement.classList.add("dark")
+      htmlElement.classList.add("dark");
     } else {
-      htmlElement.classList.remove("dark")
+      htmlElement.classList.remove("dark");
     }
-  }, [isDark, mounted])
+  }, [isDark, mounted]);
 
-  if (!mounted) return null
+  if (!mounted) return null;
+
+  const handleConnectWallet = () => {
+    try {
+      const ethereum = (window as any).ethereum;
+      if (!ethereum) {
+        alert(
+          "MetaMask is not installed. Please install it to connect your wallet."
+        );
+        return;
+      }
+
+      ethereum
+        .request({ method: "eth_requestAccounts" })
+        .then((accounts: string[]) => {
+          const account = accounts[0];
+          setAddress(account);
+          setIsConnected(true);
+        });
+    } catch (error) {
+      console.error("Error connecting wallet:", error);
+      alert("Failed to connect wallet. See console for details.");
+    }
+  };
+  const spliceAdd = (addr: string | null) => {
+    if (!addr) return "";
+    return addr.slice(0, 6) + "..." + addr.slice(-4);
+  };
+  const handleClaimBadge = async () => {
+    if (!isConnected) {
+      alert("Please connect your wallet to claim your badge.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(contractAddress, abi, signer);
+
+      const tx = await contract.claimBadge(
+        "ipfs://bafkreiernuj32ojxftkjwuwbxbyitprtyeqkxgk7r5stb75gjatekhumru"
+      );
+
+      await tx.wait();
+      alert("Badge claimed successfully!");
+
+      const tokenId = await contract.tokenIdCounter();
+      console.log("Minted Token ID:", tokenId.toString());
+
+      const uri = await contract.tokenURI(tokenId);
+      console.log("NFT URI:", uri);
+
+      const metadataURL = uri.replace(
+        "ipfs://",
+        "https://gateway.pinata.cloud/ipfs/"
+      );
+
+      const metadata = await fetch(metadataURL).then((res) => res.json());
+      console.log("Metadata:", metadata);
+
+      const imageURL = metadata.image.replace(
+        "ipfs://",
+        "https://gateway.pinata.cloud/ipfs/"
+      );
+      setImage(imageURL);
+    } catch (err: any) {
+      if (err.code === 4001) {
+        alert("❌ Transaction rejected by user");
+      } else {
+        console.error(err);
+        alert("❌ Error claiming badge. See console for details.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen relative overflow-hidden transition-colors duration-500">
@@ -33,8 +124,8 @@ export default function Home() {
       <div
         className={`absolute inset-0 transition-all duration-500 ${
           isDark
-            ? "bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900"
-            : "bg-gradient-to-br from-blue-50 via-indigo-100 to-purple-50"
+            ? "bg-linear-to-br from-slate-950 via-purple-950 to-slate-900"
+            : "bg-linear-to-br from-blue-50 via-indigo-100 to-purple-50"
         }`}
       />
 
@@ -44,21 +135,27 @@ export default function Home() {
           alt=""
           width={400}
           height={400}
-          className={`absolute -top-20 -left-20 opacity-40 rounded-full blur-sm transition-opacity duration-500 ${isDark ? "opacity-30" : "opacity-20"}`}
+          className={`absolute -top-20 -left-20 opacity-40 rounded-full blur-sm transition-opacity duration-500 ${
+            isDark ? "opacity-30" : "opacity-20"
+          }`}
         />
         <Image
           src="/digital-circuit-pattern-neon-lights-cyberpunk.jpg"
           alt=""
           width={350}
           height={350}
-          className={`absolute top-1/4 -right-16 opacity-30 rounded-full blur-sm transition-opacity duration-500 ${isDark ? "opacity-25" : "opacity-15"}`}
+          className={`absolute top-1/4 -right-16 opacity-30 rounded-full blur-sm transition-opacity duration-500 ${
+            isDark ? "opacity-25" : "opacity-15"
+          }`}
         />
         <Image
           src="/glowing-crypto-badge-medal-futuristic.jpg"
           alt=""
           width={300}
           height={300}
-          className={`absolute -bottom-10 left-1/4 opacity-30 rounded-full blur-sm transition-opacity duration-500 ${isDark ? "opacity-25" : "opacity-15"}`}
+          className={`absolute -bottom-10 left-1/4 opacity-30 rounded-full blur-sm transition-opacity duration-500 ${
+            isDark ? "opacity-25" : "opacity-15"
+          }`}
         />
       </div>
 
@@ -81,7 +178,9 @@ export default function Home() {
 
       {/* Grid pattern overlay */}
       <div
-        className={`absolute inset-0 transition-opacity duration-500 ${isDark ? "opacity-20" : "opacity-10"}`}
+        className={`absolute inset-0 transition-opacity duration-500 ${
+          isDark ? "opacity-20" : "opacity-10"
+        }`}
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fillRule='evenodd'%3E%3Cg fill='%239C92AC' fillOpacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
         }}
@@ -92,7 +191,9 @@ export default function Home() {
         {/* Navigation Bar */}
         <nav
           className={`border-b backdrop-blur-md transition-colors duration-500 ${
-            isDark ? "border-white/10 bg-black/20" : "border-black/10 bg-white/30"
+            isDark
+              ? "border-white/10 bg-black/20"
+              : "border-black/10 bg-white/30"
           }`}
         >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -112,23 +213,36 @@ export default function Home() {
                 <button
                   onClick={() => setIsDark(!isDark)}
                   className={`p-2 rounded-lg transition-all duration-300 ${
-                    isDark ? "hover:bg-white/10 text-white" : "hover:bg-black/10 text-slate-900"
+                    isDark
+                      ? "hover:bg-white/10 text-white"
+                      : "hover:bg-black/10 text-slate-900"
                   }`}
                   aria-label="Toggle theme"
                 >
-                  {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                  {isDark ? (
+                    <Sun className="w-5 h-5" />
+                  ) : (
+                    <Moon className="w-5 h-5" />
+                  )}
                 </button>
 
-                <button
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 hover:scale-105 ${
-                    isDark
-                      ? "bg-gradient-to-r from-purple-500 to-indigo-500 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40"
-                      : "bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40"
-                  }`}
-                >
-                  <Wallet className="w-4 h-4" />
-                  <span>Connect Wallet</span>
-                </button>
+                {isConnected ? (
+                  <p className={`${isDark ? "text-amber-100" : "text-black"}`}>
+                    ${spliceAdd(address)}
+                  </p>
+                ) : (
+                  <button
+                    onClick={handleConnectWallet}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 hover:scale-105 ${
+                      isDark
+                        ? "bg-linear-to-r from-purple-500 to-indigo-500 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40"
+                        : "bg-linear-to-r from-indigo-500 to-purple-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40"
+                    }`}
+                  >
+                    <Wallet className="w-4 h-4" />
+                    <span>Connect Wallet</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -139,7 +253,11 @@ export default function Home() {
           <div className="text-center space-y-8">
             <div className="flex justify-center mb-6">
               <div
-                className={`relative p-1 rounded-2xl ${isDark ? "bg-gradient-to-r from-purple-500 to-indigo-500" : "bg-gradient-to-r from-indigo-500 to-purple-500"}`}
+                className={`relative p-1 rounded-2xl ${
+                  isDark
+                    ? "bg-linear-to-r from-purple-500 to-indigo-500"
+                    : "bg-linear-to-r from-indigo-500 to-purple-500"
+                }`}
               >
                 <Image
                   src="/hackathon-trophy-badge-award-glowing-futuristic.jpg"
@@ -156,8 +274,8 @@ export default function Home() {
               <h2
                 className={`text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-balance transition-colors duration-500 ${
                   isDark
-                    ? "bg-gradient-to-r from-white via-purple-200 to-indigo-200 bg-clip-text text-transparent"
-                    : "bg-gradient-to-r from-slate-900 via-purple-800 to-indigo-800 bg-clip-text text-transparent"
+                    ? "bg-linear-to-r from-white via-purple-200 to-indigo-200 bg-clip-text text-transparent"
+                    : "bg-linear-to-r from-slate-900 via-purple-800 to-indigo-800 bg-clip-text text-transparent"
                 }`}
               >
                 Welcome to Hackathon 2025
@@ -167,25 +285,39 @@ export default function Home() {
                   isDark ? "text-slate-300" : "text-slate-600"
                 }`}
               >
-                Build, create, and innovate. Claim your badge to mark your participation in this year's hackathon.
+                Build, create, and innovate. Claim your badge to mark your
+                participation in this year's hackathon.
               </p>
             </div>
 
-            <div className="relative group">
-              <button
-                className={`relative px-10 py-4 text-lg font-semibold rounded-xl transition-all duration-300 hover:scale-105 ${
-                  isDark
-                    ? "bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white"
-                    : "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white"
-                }`}
-              >
-                ClaimBadge
-              </button>
-            </div>
+            {image ? (
+              <img src={image} alt="Your Badge" className="mx-auto w-48 h-48" />
+            ) : (
+              <div className="relative group">
+                <button
+                  onClick={handleClaimBadge}
+                  className={`relative px-10 py-4 text-lg font-semibold rounded-xl transition-all duration-300 hover:scale-105 ${
+                    isDark
+                      ? "bg-linear-to-r from-purple-600 via-indigo-600 to-blue-600 text-white"
+                      : "bg-linear-to-r from-indigo-600 via-purple-600 to-pink-600 text-white"
+                  }`}
+                >
+                  {loading ? (
+                    <div className="w-6 h-6 border-4 border-orange-400 border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    "Claim Badge"
+                  )}
+                </button>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-12 max-w-4xl mx-auto">
               <div
-                className={`rounded-xl p-4 backdrop-blur-md transition-all duration-300 hover:scale-105 ${isDark ? "bg-white/5 border border-white/10" : "bg-black/5 border border-black/10"}`}
+                className={`rounded-xl p-4 backdrop-blur-md transition-all duration-300 hover:scale-105 ${
+                  isDark
+                    ? "bg-white/5 border border-white/10"
+                    : "bg-black/5 border border-black/10"
+                }`}
               >
                 <Image
                   src="/code-programming-hackathon-developer.jpg"
@@ -194,11 +326,27 @@ export default function Home() {
                   height={120}
                   className="rounded-lg w-full h-28 object-cover mb-3"
                 />
-                <h3 className={`font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Build Projects</h3>
-                <p className={`text-sm ${isDark ? "text-slate-400" : "text-slate-600"}`}>Create innovative solutions</p>
+                <h3
+                  className={`font-semibold ${
+                    isDark ? "text-white" : "text-slate-900"
+                  }`}
+                >
+                  Build Projects
+                </h3>
+                <p
+                  className={`text-sm ${
+                    isDark ? "text-slate-400" : "text-slate-600"
+                  }`}
+                >
+                  Create innovative solutions
+                </p>
               </div>
               <div
-                className={`rounded-xl p-4 backdrop-blur-md transition-all duration-300 hover:scale-105 ${isDark ? "bg-white/5 border border-white/10" : "bg-black/5 border border-black/10"}`}
+                className={`rounded-xl p-4 backdrop-blur-md transition-all duration-300 hover:scale-105 ${
+                  isDark
+                    ? "bg-white/5 border border-white/10"
+                    : "bg-black/5 border border-black/10"
+                }`}
               >
                 <Image
                   src="/team-collaboration-diverse-group-working-together.jpg"
@@ -207,11 +355,27 @@ export default function Home() {
                   height={120}
                   className="rounded-lg w-full h-28 object-cover mb-3"
                 />
-                <h3 className={`font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Collaborate</h3>
-                <p className={`text-sm ${isDark ? "text-slate-400" : "text-slate-600"}`}>Work with talented teams</p>
+                <h3
+                  className={`font-semibold ${
+                    isDark ? "text-white" : "text-slate-900"
+                  }`}
+                >
+                  Collaborate
+                </h3>
+                <p
+                  className={`text-sm ${
+                    isDark ? "text-slate-400" : "text-slate-600"
+                  }`}
+                >
+                  Work with talented teams
+                </p>
               </div>
               <div
-                className={`rounded-xl p-4 backdrop-blur-md transition-all duration-300 hover:scale-105 ${isDark ? "bg-white/5 border border-white/10" : "bg-black/5 border border-black/10"}`}
+                className={`rounded-xl p-4 backdrop-blur-md transition-all duration-300 hover:scale-105 ${
+                  isDark
+                    ? "bg-white/5 border border-white/10"
+                    : "bg-black/5 border border-black/10"
+                }`}
               >
                 <Image
                   src="/trophy-winning-celebration-success-award.jpg"
@@ -220,8 +384,18 @@ export default function Home() {
                   height={120}
                   className="rounded-lg w-full h-28 object-cover mb-3"
                 />
-                <h3 className={`font-semibold ${isDark ? "text-white" : "text-slate-900"}`}>Win Prizes</h3>
-                <p className={`text-sm ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                <h3
+                  className={`font-semibold ${
+                    isDark ? "text-white" : "text-slate-900"
+                  }`}
+                >
+                  Win Prizes
+                </h3>
+                <p
+                  className={`text-sm ${
+                    isDark ? "text-slate-400" : "text-slate-600"
+                  }`}
+                >
                   Earn rewards and recognition
                 </p>
               </div>
@@ -230,5 +404,5 @@ export default function Home() {
         </main>
       </div>
     </div>
-  )
+  );
 }
